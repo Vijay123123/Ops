@@ -154,3 +154,5 @@ The token in `demo/vulnerable/config.py` is **fake**.
 =======
 # devOps
 >>>>>>> 052da963c0dfc743293cccd68a66c20db5e4c247
+
+Fixed: no hard-coded secrets, patched base image and dependencies.
