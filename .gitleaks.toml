@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentionally insecure demo files"
+paths = ['''demo/''']

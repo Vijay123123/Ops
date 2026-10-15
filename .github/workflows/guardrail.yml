@@ -1,0 +1,80 @@
+name: GuardRail Security Pipeline
+
+on:
+  push:
+    branches: [main, "demo-*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Gitleaks - secrets detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so old commits are scanned too
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vulnerability-scan:
+    name: Trivy - image and dependency CVEs
+    runs-on: ubuntu-latest
+    env:
+      TRIVY: aquasec/trivy:0.57.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t guardrail-app:scan .
+          mkdir -p reports "$HOME/.cache/trivy"
+
+      # 1) Report steps: never fail, always produce evidence
+      - name: Trivy report (image)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            -v "$PWD/reports:/reports" \
+            $TRIVY image --format table --exit-code 0 \
+            --output /reports/trivy-image-report.txt guardrail-app:scan
+
+      - name: Trivy report (dependencies)
+        run: |
+          docker run --rm \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            -v "$PWD:/src" \
+            -v "$PWD/reports:/reports" \
+            $TRIVY fs --skip-dirs demo --skip-dirs /src/demo \
+            --format table --exit-code 0 \
+            --output /reports/trivy-fs-report.txt /src
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardrail-scan-reports
+          path: reports/
+
+      # 2) Gate steps: fail the build on serious, fixable issues
+      - name: Trivy gate (image)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            $TRIVY image --severity CRITICAL,HIGH --ignore-unfixed \
+            --exit-code 1 guardrail-app:scan
+
+      - name: Trivy gate (dependencies)
+        run: |
+          docker run --rm \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+            -v "$PWD:/src" \
+            $TRIVY fs --skip-dirs demo --skip-dirs /src/demo \
+            --severity CRITICAL,HIGH --ignore-unfixed \
+            --exit-code 1 /src
