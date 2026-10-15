@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # GuardRail: A DevSecOps Pipeline for Automated Secrets and Vulnerability Scanning
 
 GuardRail adds automated security checks to a CI/CD pipeline ("shifting security left").
@@ -150,3 +151,6 @@ The token in `demo/vulnerable/config.py` is **fake**.
 - Gitleaks Action is free for personal repositories; organization repositories need a free license key.
 - Pin tool versions and review them periodically.
 - Local checks: `gitleaks detect -v` and `trivy image guardrail-app:scan`.
+=======
+# devOps
+>>>>>>> 052da963c0dfc743293cccd68a66c20db5e4c247
