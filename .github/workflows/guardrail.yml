@@ -1,4 +1,3 @@
-```yaml
 name: GuardRail Security Pipeline
 
 on:
@@ -9,54 +8,33 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   secrets-scan:
     name: Gitleaks - secrets detection
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Set Gitleaks commit range
-        id: commits
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ github.event.before }}" ] && \
-               [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "base=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Gitleaks - secrets detection
-        uses: gitleaks/gitleaks-action@v2
+          fetch-depth: 0   # full history so old commits are scanned too
+      - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
 
   vulnerability-scan:
     name: Trivy - image and dependency CVEs
     runs-on: ubuntu-latest
     env:
       TRIVY: aquasec/trivy:0.57.1
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
           docker build -t guardrail-app:scan .
           mkdir -p reports "$HOME/.cache/trivy"
 
-      # Report steps: produce evidence without failing on findings
+      # 1) Report steps: never fail, always produce evidence
       - name: Trivy report (image)
         run: |
           docker run --rm \
@@ -83,7 +61,7 @@ jobs:
           name: guardrail-scan-reports
           path: reports/
 
-      # Gate steps: fail on serious, unfixed vulnerabilities
+      # 2) Gate steps: fail the build on serious, fixable issues
       - name: Trivy gate (image)
         run: |
           docker run --rm \
@@ -95,8 +73,8 @@ jobs:
       - name: Trivy gate (dependencies)
         run: |
           docker run --rm \
+            -v "$HOME/.cache/trivy:/root/.cache/trivy" \
             -v "$PWD:/src" \
             $TRIVY fs --skip-dirs demo --skip-dirs /src/demo \
             --severity CRITICAL,HIGH --ignore-unfixed \
             --exit-code 1 /src
-```
